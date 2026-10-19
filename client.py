@@ -5,6 +5,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter
+from typing import Any, Dict, List, Mapping, Sequence
 
 # basic client setup stuff
 HOST = "localhost"
@@ -21,20 +22,27 @@ DEFAULT_BOOT_TIME = 60
 DEFAULT_HOURLY_RATE = 1.0
 DEFAULT_RESOURCE = 1
 
+# a server as parsed from a GETS reply, and the specs loaded from ds-system.xml
+Server = Dict[str, Any]
+Specs = Dict[str, Dict[str, Any]]
+
+
 class DSClient:
-    def __init__(self):
+    """Thin wrapper around the TCP socket to ds-server (newline terminated messages)."""
+
+    def __init__(self) -> None:
 
         # open socket connection to ds-server
         self.sock = socket.socket()
         self.sock.connect((HOST, PORT))
         self.reader = self.sock.makefile("r", encoding="utf-8", newline="\n")
 
-    def send(self, message):
+    def send(self, message: str) -> None:
 
         # send message with newline cause server expects that
         self.sock.sendall((message + "\n").encode("utf-8"))
 
-    def receive(self):
+    def receive(self) -> str:
 
         # read one response line from server
         msg = self.reader.readline()
@@ -42,14 +50,15 @@ class DSClient:
             raise RuntimeError("Server closed connection")
         return msg.strip()
 
-    def close(self):
+    def close(self) -> None:
 
-         # close everything nicely at the end
+        # close everything nicely at the end
         self.reader.close()
         self.sock.close()
 
 
-def load_specs():
+def load_specs() -> Specs:
+    """Read server specs from ds-system.xml, retrying while ds-server writes it. Empty dict if it never appears."""
 
     # try loading server specs from ds-system.xml
     for _ in range(SPEC_LOAD_RETRIES):
@@ -74,7 +83,8 @@ def load_specs():
     return {}
 
 
-def parse_server(line):
+def parse_server(line: str) -> Server:
+    """Parse one server record from a GETS reply into a dict."""
     p = line.split()
     return {
         "type": p[0],
@@ -88,7 +98,8 @@ def parse_server(line):
     }
 
 
-def get_servers(client, query, cores, memory, disk):
+def get_servers(client: DSClient, query: str, cores: int, memory: int, disk: int) -> List[Server]:
+    """Run GETS Avail or GETS Capable for the given requirements and return the parsed servers."""
 
     # ask server for either Avail or Capable servers
     client.send(f"GETS {query} {cores} {memory} {disk}")
@@ -113,7 +124,8 @@ def get_servers(client, query, cores, memory, disk):
     return servers
 
 
-def choose_server(servers, specs):
+def choose_server(servers: Sequence[Server], specs: Mapping[str, Mapping[str, Any]]) -> Server:
+    """Pick the best server from the candidates using the ranking tuple described below."""
 
     # helper to get spec values, or use fallback if missing
     def spec(s, key, fb):
@@ -143,13 +155,13 @@ def choose_server(servers, specs):
 class Stats:
     """Optional run summary, only printed when --stats or DS_STATS is set."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.jobs = 0
         self.avail_hits = 0
         self.capable_fallbacks = 0
-        self.by_type = Counter()
+        self.by_type: Counter = Counter()
 
-    def record(self, server, fallback):
+    def record(self, server: Server, fallback: bool) -> None:
         self.jobs += 1
         if fallback:
             self.capable_fallbacks += 1
@@ -157,7 +169,7 @@ class Stats:
             self.avail_hits += 1
         self.by_type[server["type"]] += 1
 
-    def report(self):
+    def report(self) -> str:
         lines = [
             "# client stats",
             f"# jobs scheduled:     {self.jobs}",
@@ -170,7 +182,7 @@ class Stats:
         return "\n".join(lines)
 
 
-def main():
+def main() -> None:
     client = DSClient()
     show_stats = "--stats" in sys.argv or bool(os.environ.get("DS_STATS"))
     stats = Stats()
