@@ -3,6 +3,7 @@ import os
 import socket
 import time
 import xml.etree.ElementTree as ET
+from collections import Counter
 
 # basic client setup stuff
 HOST = "localhost"
@@ -136,9 +137,36 @@ def choose_server(servers, specs):
             s["id"],
         ),
     )
-    
 
-   
+
+class Stats:
+    """Optional run summary, only printed when --stats or DS_STATS is set."""
+
+    def __init__(self):
+        self.jobs = 0
+        self.avail_hits = 0
+        self.capable_fallbacks = 0
+        self.by_type = Counter()
+
+    def record(self, server, fallback):
+        self.jobs += 1
+        if fallback:
+            self.capable_fallbacks += 1
+        else:
+            self.avail_hits += 1
+        self.by_type[server["type"]] += 1
+
+    def report(self):
+        lines = [
+            "# client stats",
+            f"# jobs scheduled:     {self.jobs}",
+            f"# GETS Avail hits:    {self.avail_hits}",
+            f"# GETS Capable used:  {self.capable_fallbacks}",
+            "# jobs per server type:",
+        ]
+        for name, count in sorted(self.by_type.items()):
+            lines.append(f"#   {name}: {count}")
+        return "\n".join(lines)
 
 
 def main():
