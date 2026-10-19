@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import socket
+import sys
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -171,7 +172,9 @@ class Stats:
 
 def main():
     client = DSClient()
-    
+    show_stats = "--stats" in sys.argv or bool(os.environ.get("DS_STATS"))
+    stats = Stats()
+
     # standard handshake
     client.send("HELO")
     client.receive()
@@ -207,6 +210,7 @@ def main():
 
             # first try servers that can run it right now
             servers = get_servers(client, "Avail", job["cores"], job["memory"], job["disk"])
+            fallback = not servers
 
             if not servers:
 
@@ -221,11 +225,15 @@ def main():
             # send chosen server back to scheduler
             client.send(f"SCHD {job['id']} {server['type']} {server['id']}")
             client.receive()
+            stats.record(server, fallback)
 
     # clean exit
     client.send("QUIT")
     client.receive()
     client.close()
+
+    if show_stats:
+        print(stats.report(), file=sys.stderr)
 
 
 if __name__ == "__main__":
