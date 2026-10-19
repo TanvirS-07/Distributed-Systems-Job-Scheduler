@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+# files supplied with the assignment kit and the old handshake backup are left as they are
+extend-exclude = ["ds_test.py", "mark_client.py", "ref_results.py", "client_handshake_backup.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
