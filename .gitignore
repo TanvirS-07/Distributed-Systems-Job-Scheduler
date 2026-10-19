@@ -5,3 +5,5 @@ __pycache__
 
 # ds-test
 test_results.json
+.pytest_cache
+Liveshare link
