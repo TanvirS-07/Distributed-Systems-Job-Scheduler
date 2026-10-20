@@ -1,5 +1,7 @@
 import os
+import socket
 import sys
+import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -119,3 +121,69 @@ def test_stats_counts_and_report():
     assert (stats.jobs, stats.avail_hits, stats.capable_fallbacks) == (3, 2, 1)
     report = stats.report()
     assert "small: 2" in report and "large: 1" in report
+
+
+# --- end-to-end against a mock ds-server ------------------------------------
+
+def run_mock_server(listener, jobs, avail, capable, log):
+    """Minimal ds-server: speaks just enough protocol for the client's main()."""
+    conn, _ = listener.accept()
+    f = conn.makefile("r", newline="\n")
+
+    def say(msg):
+        conn.sendall((msg + "\n").encode())
+
+    pending = list(jobs)
+    for line in f:
+        line = line.strip()
+        log.append(line)
+        cmd = line.split()[0]
+        if cmd in ("HELO", "AUTH", "SCHD"):
+            say("OK")
+        elif cmd == "REDY":
+            say(pending.pop(0) if pending else "NONE")
+        elif cmd == "GETS":
+            servers = avail if line.split()[1] == "Avail" else capable
+            say(f"DATA {len(servers)} 100")
+            f.readline()  # client's OK
+            for s in servers:
+                say(s)
+            if servers:
+                f.readline()  # client's second OK
+            say(".")
+        elif cmd == "QUIT":
+            say("QUIT")
+            break
+    conn.close()
+
+
+def test_main_schedules_every_job_and_quits(tmp_path, monkeypatch, capsys):
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    port = listener.getsockname()[1]
+
+    jobs = ["JOBN 0 10 1 100 100 50", "JOBN 1 20 1 100 100 50"]
+    avail = [server_line("small", 0), server_line("large", 1, cores=8)]
+    log = []
+    t = threading.Thread(target=run_mock_server, args=(listener, jobs, avail, [server_line("small", 0)], log),
+                         daemon=True)
+    t.start()
+
+    monkeypatch.chdir(tmp_path)  # no ds-system.xml here
+    monkeypatch.setattr(client, "PORT", port)
+    monkeypatch.setattr(client, "HOST", "127.0.0.1")
+    monkeypatch.setattr(client, "SPEC_LOAD_RETRIES", 1)
+    monkeypatch.setattr(client, "SPEC_LOAD_DELAY", 0)
+    monkeypatch.setattr(sys, "argv", ["client.py", "--stats"])
+
+    client.main()
+    t.join(timeout=5)
+    listener.close()
+
+    schd = [line for line in log if line.startswith("SCHD")]
+    assert len(schd) == 2
+    # with no specs the tie-break falls back to available cores -> large 1 wins
+    assert schd[0] == "SCHD 0 large 1"
+    assert log[-1] == "QUIT"
+    assert "jobs scheduled:     2" in capsys.readouterr().err
