@@ -219,6 +219,8 @@ def main() -> None:
     client = DSClient()
     show_stats = "--stats" in sys.argv or bool(os.environ.get("DS_STATS"))
     stats = Stats()
+    path = trace_path(sys.argv, os.environ)
+    tracer = Tracer.open(path) if path else None
 
     # standard handshake
     client.send("HELO")
@@ -271,12 +273,16 @@ def main() -> None:
             client.send(f"SCHD {job['id']} {server['type']} {server['id']}")
             client.receive()
             stats.record(server, fallback)
+            if tracer:
+                tracer.record(job, "Capable" if fallback else "Avail", servers, server)
 
     # clean exit
     client.send("QUIT")
     client.receive()
     client.close()
 
+    if tracer:
+        tracer.close()
     if show_stats:
         print(stats.report(), file=sys.stderr)
 
