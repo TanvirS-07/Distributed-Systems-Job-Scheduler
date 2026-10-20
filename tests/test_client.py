@@ -24,6 +24,11 @@ def server_line(stype, sid, state="active", cores=4, mem=8000, disk=64000, waiti
     return f"{stype} {sid} {state} 0 {cores} {mem} {disk} {waiting} {running}"
 
 
+def srv(stype="small", sid=0, waiting=0, cores=2, mem=1000, disk=1000):
+    return {"type": stype, "id": sid, "state": "active", "avail_cores": cores,
+            "avail_memory": mem, "avail_disk": disk, "waiting": waiting, "running": 0}
+
+
 # --- parse_server -----------------------------------------------------------
 
 def test_parse_server_fields():
@@ -45,3 +50,40 @@ def test_get_servers_none_response():
     fake = FakeClient(["DATA 0 0", "."])
     assert client.get_servers(fake, "Capable", 99, 1, 1) == []
     assert fake.sent == ["GETS Capable 99 1 1", "OK"]
+
+
+# --- choose_server (tie-break order) ----------------------------------------
+
+SPECS = {"small": {"cores": 2}, "large": {"cores": 8}}
+
+
+def test_fewest_waiting_jobs_wins_first():
+    a, b = srv("large", 0, waiting=3), srv("small", 1, waiting=0)
+    assert client.choose_server([a, b], SPECS) is b
+
+
+def test_bigger_total_cores_breaks_waiting_tie():
+    a, b = srv("small", 0), srv("large", 1)
+    assert client.choose_server([a, b], SPECS) is b
+
+
+def test_more_available_cores_next():
+    a, b = srv("small", 0, cores=1), srv("small", 1, cores=2)
+    assert client.choose_server([a, b], SPECS) is b
+
+
+def test_more_available_memory_then_disk():
+    a, b = srv("small", 0, mem=500), srv("small", 1, mem=900)
+    assert client.choose_server([a, b], SPECS) is b
+    c, d = srv("small", 0, disk=500), srv("small", 1, disk=900)
+    assert client.choose_server([c, d], SPECS) is d
+
+
+def test_lowest_id_is_final_tiebreak():
+    a, b = srv("small", 5), srv("small", 2)
+    assert client.choose_server([a, b], SPECS) is b
+
+
+def test_unknown_type_falls_back_to_available_cores():
+    a, b = srv("mystery", 0, cores=1), srv("mystery", 1, cores=3)
+    assert client.choose_server([a, b], {}) is b
