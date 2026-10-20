@@ -5,7 +5,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, TextIO
 
 # basic client setup stuff
 HOST = "localhost"
@@ -180,6 +180,39 @@ class Stats:
         for name, count in sorted(self.by_type.items()):
             lines.append(f"#   {name}: {count}")
         return "\n".join(lines)
+
+
+def trace_path(argv: Sequence[str], environ: Mapping[str, str]) -> Optional[str]:
+    """Where to write the decision trace: --trace FILE, --trace=FILE or DS_TRACE. None means tracing is off."""
+    for i, arg in enumerate(argv):
+        if arg.startswith("--trace="):
+            return arg.split("=", 1)[1] or None
+        if arg == "--trace" and i + 1 < len(argv):
+            return argv[i + 1]
+    return environ.get("DS_TRACE") or None
+
+
+class Tracer:
+    """Optional per-job decision log: the candidates the server offered and the one we picked."""
+
+    def __init__(self, handle: TextIO) -> None:
+        self.handle = handle
+
+    @classmethod
+    def open(cls, path: str) -> "Tracer":
+        return cls(open(path, "w", encoding="utf-8"))
+
+    def record(self, job: Mapping[str, int], query: str, candidates: Sequence[Server], chosen: Server) -> None:
+        cand = ", ".join(
+            f"{s['type']} {s['id']} (w={s['waiting']} r={s['running']} cores={s['avail_cores']})" for s in candidates
+        )
+        self.handle.write(
+            f"job {job['id']} cores={job['cores']} mem={job['memory']} disk={job['disk']} "
+            f"via={query} candidates=[{cand}] -> {chosen['type']} {chosen['id']}\n"
+        )
+
+    def close(self) -> None:
+        self.handle.close()
 
 
 def main() -> None:
