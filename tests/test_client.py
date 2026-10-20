@@ -87,3 +87,35 @@ def test_lowest_id_is_final_tiebreak():
 def test_unknown_type_falls_back_to_available_cores():
     a, b = srv("mystery", 0, cores=1), srv("mystery", 1, cores=3)
     assert client.choose_server([a, b], {}) is b
+
+
+# --- load_specs -------------------------------------------------------------
+
+def test_load_specs_reads_xml(tmp_path, monkeypatch):
+    (tmp_path / "ds-system.xml").write_text(
+        '<system><servers>'
+        '<server type="tiny" limit="4" bootupTime="40" hourlyRate="0.2" cores="2" memory="2000" disk="4000"/>'
+        '</servers></system>'
+    )
+    monkeypatch.chdir(tmp_path)
+    specs = client.load_specs()
+    assert specs["tiny"] == {"limit": 4, "boot": 40, "rate": 0.2, "cores": 2, "memory": 2000, "disk": 4000}
+
+
+def test_load_specs_missing_file_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(client, "SPEC_LOAD_RETRIES", 2)
+    monkeypatch.setattr(client, "SPEC_LOAD_DELAY", 0)
+    assert client.load_specs() == {}
+
+
+# --- Stats ------------------------------------------------------------------
+
+def test_stats_counts_and_report():
+    stats = client.Stats()
+    stats.record(srv("small"), fallback=False)
+    stats.record(srv("small"), fallback=False)
+    stats.record(srv("large"), fallback=True)
+    assert (stats.jobs, stats.avail_hits, stats.capable_fallbacks) == (3, 2, 1)
+    report = stats.report()
+    assert "small: 2" in report and "large: 1" in report
