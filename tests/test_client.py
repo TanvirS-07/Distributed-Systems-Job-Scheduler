@@ -6,6 +6,7 @@ import threading
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import client  # noqa: E402
+from make_gantt import build_gantt, parse_log  # noqa: E402
 
 
 class FakeClient:
@@ -187,3 +188,29 @@ def test_main_schedules_every_job_and_quits(tmp_path, monkeypatch, capsys):
     assert schd[0] == "SCHD 0 large 1"
     assert log[-1] == "QUIT"
     assert "jobs scheduled:     2" in capsys.readouterr().err
+
+
+# --- make_gantt -------------------------------------------------------------
+
+SAMPLE_LOG = """\
+t 11: job 0 -- CPU: 3, Mem: 1100, Disk: 1800, Est Runtime: 721 SUBMITTED
+      job 0 (waiting) on highway 0 (booting) SCHEDULED
+t 71: job 0 on highway 0 RUNNING
+t 150: job 5 -- CPU: 1, Mem: 100, Disk: 100, Est Runtime: 250 SUBMITTED
+t 626: job 0 on highway 0 COMPLETED
+       job 5 on highway 0 RUNNING
+t 876: job 5 on highway 0 COMPLETED
+""".splitlines()
+
+
+def test_parse_log_handles_missing_timestamp_prefix():
+    jobs = parse_log(SAMPLE_LOG)
+    assert jobs[0] == {"submit": 11, "start": 71, "end": 626, "server": ("highway", 0)}
+    assert jobs[5]["start"] == 626 and jobs[5]["submit"] == 150
+
+
+def test_build_gantt_marks_waiting():
+    chart = build_gantt(parse_log(SAMPLE_LOG))
+    assert "section highway 0" in chart
+    assert "Job 0 Waiting: crit, 11, 71" in chart
+    assert "Job 5: 626, 876" in chart
