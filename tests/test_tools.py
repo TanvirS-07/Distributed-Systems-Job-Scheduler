@@ -153,3 +153,20 @@ def test_gantt_skips_incomplete_jobs():
 def test_gantt_no_waiting_bar_when_started_immediately():
     chart = make_gantt.build_gantt(make_gantt.parse_log(LOG))
     assert "Job 1 Waiting" not in chart and "Job 0 Waiting: crit, 10, 30" in chart
+
+
+# --- plot_results smoke tests -------------------------------------------------
+
+
+def test_plots_are_written(tmp_path):
+    pytest.importorskip("matplotlib")
+    import plot_results
+
+    ref = {m: {"config010-short-low.xml": {a: float(i + 1) * 10 for i, a in enumerate(ALGOS)}}
+           for m in plot_results.METRICS}
+    client = {m: {"config010-short-low.xml": 25.0} for m in plot_results.METRICS}
+
+    plot_results.per_config_chart(client, ref, str(tmp_path / "a.png"))
+    plot_results.vs_best_chart(client, ref, str(tmp_path / "b.png"))
+    plot_results.averages_chart(client, ref, str(tmp_path / "c.png"))
+    assert all((tmp_path / n).stat().st_size > 0 for n in ("a.png", "b.png", "c.png"))
