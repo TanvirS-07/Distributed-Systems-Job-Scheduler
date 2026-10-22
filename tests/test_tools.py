@@ -5,6 +5,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import export_results  # noqa: E402
 import workload_report  # noqa: E402
 
 ALGOS = ["atl", "ff", "bf", "fc", "fafc"]
@@ -80,3 +81,28 @@ def test_format_report_has_both_sections():
     client, ref = make_results({"config010-short-low.xml": 150})
     text = workload_report.format_report(workload_report.build_report(client, ref), "Turnaround time")
     assert "By job length" in text and "By job load" in text and "short" in text
+
+
+# --- export_results -----------------------------------------------------------
+
+
+def test_metric_table_bolds_best_and_adds_average():
+    client, ref = make_results({"config010-short-low.xml": 150, "config020-short-low.xml": 300})
+    lines = export_results.metric_table(client, ref, "Turnaround time")
+    text = "\n".join(lines)
+    assert "| Config | ATL | FF | BF | FC | FAFC | Yours |" in text
+    assert "**150**" in text            # client best on first config
+    assert "**190**" in text            # FAFC best on second config
+    assert "**Average**" in text
+
+
+def test_metric_table_empty_when_no_data():
+    assert export_results.metric_table({"Turnaround time": {}}, {"Turnaround time": {}}, "Turnaround time") == []
+
+
+def test_build_markdown_skips_metrics_without_data():
+    client, ref = make_results({"config010-short-low.xml": 150})
+    md = export_results.build_markdown(client | {"Resource utilisation": {}, "Total rental cost": {}},
+                                       ref | {"Resource utilisation": {}, "Total rental cost": {}})
+    assert "### Turnaround time" in md
+    assert "### Resource utilisation" not in md
