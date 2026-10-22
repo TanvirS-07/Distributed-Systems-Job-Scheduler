@@ -6,6 +6,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import export_results  # noqa: E402
+import log_summary  # noqa: E402
+import make_gantt  # noqa: E402
 import workload_report  # noqa: E402
 
 ALGOS = ["atl", "ff", "bf", "fc", "fafc"]
@@ -106,3 +108,48 @@ def test_build_markdown_skips_metrics_without_data():
                                        ref | {"Resource utilisation": {}, "Total rental cost": {}})
     assert "### Turnaround time" in md
     assert "### Resource utilisation" not in md
+
+
+# --- log_summary --------------------------------------------------------------
+
+LOG = """\
+t 10: job 0 -- CPU: 1, Mem: 1, Disk: 1, Est Runtime: 100 SUBMITTED
+t 30: job 0 on tiny 0 RUNNING
+t 130: job 0 on tiny 0 COMPLETED
+t 20: job 1 -- CPU: 1, Mem: 1, Disk: 1, Est Runtime: 50 SUBMITTED
+t 20: job 1 on tiny 1 RUNNING
+t 70: job 1 on tiny 1 COMPLETED
+t 40: job 2 -- CPU: 1, Mem: 1, Disk: 1, Est Runtime: 50 SUBMITTED
+""".splitlines()
+
+
+def test_summarise_times():
+    s = log_summary.summarise(make_gantt.parse_log(LOG))
+    assert s["jobs"] == 2 and s["incomplete"] == 1
+    assert s["avg_wait"] == pytest.approx(10)       # (20 + 0) / 2
+    assert s["avg_exec"] == pytest.approx(75)       # (100 + 50) / 2
+    assert s["avg_turnaround"] == pytest.approx(85)
+    assert s["end_time"] == 130
+    assert s["servers"][("tiny", 0)] == {"jobs": 1, "busy": 100}
+
+
+def test_summarise_empty_log():
+    assert log_summary.summarise({}) == {}
+
+
+def test_format_summary_lists_servers():
+    text = log_summary.format_summary(log_summary.summarise(make_gantt.parse_log(LOG)))
+    assert "tiny 0" in text and "avg turnaround time: 85.0" in text
+
+
+# --- make_gantt edge cases ----------------------------------------------------
+
+
+def test_gantt_skips_incomplete_jobs():
+    chart = make_gantt.build_gantt(make_gantt.parse_log(LOG))
+    assert "Job 2" not in chart and "Job 0:" in chart
+
+
+def test_gantt_no_waiting_bar_when_started_immediately():
+    chart = make_gantt.build_gantt(make_gantt.parse_log(LOG))
+    assert "Job 1 Waiting" not in chart and "Job 0 Waiting: crit, 10, 30" in chart
