@@ -126,3 +126,35 @@ If servers are free, it picks the best one using a strict set of rules:
 
 If no available server is returned, it falls back to GETS Capable and schedules the job to the first capable server returned by ds-server.
 
+
+
+---
+
+## Developer Tools
+
+Extra tooling around the scheduler. None of it changes how `client.py` schedules jobs.
+
+### Client flags
+
+| Flag | Env var | Effect |
+|---|---|---|
+| `--stats` | `DS_STATS=1` | Print jobs scheduled, `GETS Avail` hits vs `GETS Capable` fallbacks and jobs per server type to stderr when the run ends |
+| `--trace FILE` | `DS_TRACE=FILE` | Write one line per job with the candidate servers offered and the one chosen |
+
+```bash
+python3 client.py --stats --trace trace.txt
+```
+
+Without either flag the client behaves and prints exactly as before.
+
+### Make targets
+
+```bash
+make setup    # chmod +x ds-* (once)
+make test     # unit tests (pytest)
+make lint     # ruff
+make run      # one run against CONFIG=./configs/sample-configs/ds-sample-config01.xml
+make trace    # same, with --stats and --trace trace.txt
+make bench    # full marking harness
+./run_all.sh  # unit tests -> benchmark -> charts
+```
