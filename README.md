@@ -158,3 +158,27 @@ make trace    # same, with --stats and --trace trace.txt
 make bench    # full marking harness
 ./run_all.sh  # unit tests -> benchmark -> charts
 ```
+
+### Results and analysis
+
+After a benchmark run has written `results/test_results.json`:
+
+```bash
+make plots    # charts into diagrams/ (needs matplotlib)
+make report   # results by job length and by load, vs the best baseline
+make export   # RESULTS.md with per-config tables
+```
+
+### Log tools
+
+Given a `ds-server -v all` log:
+
+```bash
+python3 make_gantt.py run.log -o diagrams/run.mmd   # Mermaid Gantt chart
+python3 log_summary.py run.log                      # waiting / execution / turnaround and per-server load
+```
+
+### Tests and CI
+
+`tests/` holds the unit tests, including an end-to-end run of the client against a mock `ds-server`. GitHub Actions
+(`.github/workflows/ci.yml`) runs ruff, the unit tests, and a smoke run of the client against the real `ds-server`.
