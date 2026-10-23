@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest matplotlib
+      - run: python -m pytest tests -q
+
+  simulation-smoke:
+    # Runs the real client against ds-server on a small sample config.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run client against ds-server
+        run: |
+          chmod +x ds-server ds-client ds-mermaid
+          ./ds-server -n -p 50000 -v brief -c ./configs/sample-configs/ds-sample-config01.xml > server.out &
+          SERVER_PID=$!
+          sleep 2
+          timeout 120 python3 client.py --stats
+          wait $SERVER_PID
+          cat server.out
+          grep -q "avg turnaround time" server.out
