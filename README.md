@@ -1,5 +1,7 @@
 # Distributed Systems Capacity-Aware Job Scheduler
 
+[![CI](https://github.com/TanvirS-07/Distributed-Systems-Job-Scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/TanvirS-07/Distributed-Systems-Job-Scheduler/actions/workflows/ci.yml)
+
 A custom Python client-side job scheduling engine built for distributed system simulations (`ds-sim`). The scheduler optimises task allocation across server clusters by evaluating real-time server availability, resource capacities, dynamic queue lengths, and hardware constraints.
 
 Evaluated against standard baseline algorithms (ATL, FF, BF, FC, FAFC), this algorithm reduced average job turnaround times by **99%+** in high-throughput simulated server workloads.
