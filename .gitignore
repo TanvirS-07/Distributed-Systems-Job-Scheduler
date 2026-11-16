@@ -7,3 +7,6 @@ __pycache__
 test_results.json
 .pytest_cache
 Liveshare link
+
+# ruff
+.ruff_cache
