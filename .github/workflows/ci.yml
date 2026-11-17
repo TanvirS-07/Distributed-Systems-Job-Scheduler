@@ -27,12 +27,15 @@ jobs:
 
   simulation-smoke:
     # Runs the real client against ds-server on a small sample config.
-    runs-on: ubuntu-latest
+    # ds-server is a prebuilt binary linked against libxml2.so.2, which newer
+    # Ubuntu images no longer ship, so pin the image and install it explicitly.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y libxml2
       - name: Run client against ds-server
         run: |
           chmod +x ds-server ds-client ds-mermaid
